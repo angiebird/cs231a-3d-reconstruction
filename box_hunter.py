@@ -219,7 +219,6 @@ class Box():
             self.parallel_line_pair_ls = np.array(parallel_line_pair_ls)
             self.image = np.zeros((5000, 5000, 3))
             self.assign_plane_corner_indices()
-            print(self.share_corner_idx)
             self.K = K
 
         else:
@@ -400,19 +399,20 @@ class Box():
             corner_indices = self.plane_corner_indices[plane_idx]
             A = np.zeros((3, len(self.corner_ls)))
             # print("=")
+            sing_ls = [1, -1, 1]
             for i in range(1, 4):
                 corner_idx = corner_indices[(idx + i) % 4]
                 sign = (-1) ** (i+1)
                 A[:, corner_idx] = sign * p3d_ls[corner_idx]
                 # print(p3d_ls[corner_idx])
             b = p3d_ls[self.share_corner_idx]
-            # print(b)
             A_ls.append(A)
             b_ls.append(b)
         AA = np.concatenate(A_ls, axis=0)
         bb = np.concatenate(b_ls)
         AA_inv = np.linalg.pinv(AA)
         r = AA_inv.dot(bb)
+        r[3] = 1  # The default ratio of D
         scale_p3d_ls = []
         for i, p3d in enumerate(p3d_ls):
             scale_p3d_ls.append(p3d * r[i])
@@ -426,7 +426,8 @@ class Box():
             x = []
             y = []
             z = []
-            for corner_idx in self.plane_corner_indices[plane_idx]:
+            for order in [0, 1, 2, 3, 0]:
+                corner_idx = self.plane_corner_indices[plane_idx][order]
                 p3d = p3d_ls[corner_idx]
                 x.append(p3d[0])
                 y.append(p3d[1])
@@ -443,5 +444,5 @@ if __name__ == '__main__':
     # box.augment()
     # box.get_camera_matrix()
     #scale_p3d_ls = box.solve_box_3d_position()
-    # box.show_3d_box_reconstruction()
-    box.show_3d_reconstruction()
+    box.show_3d_box_reconstruction()
+    # box.show_3d_reconstruction()
