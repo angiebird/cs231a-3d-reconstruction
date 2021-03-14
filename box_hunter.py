@@ -180,28 +180,71 @@ def compute_rotation_matrix_between_cameras(vanishing_points1, vanishing_points2
 
 class Box():
     def __init__(self, filename):
-        fp = open(filename)
-        json_obj = json.loads(fp.read())
-        plane_ls = []
-        corner_ls = []
-        parallel_line_pair_ls = []
-        for shape in json_obj['shapes']:
-            label = shape['label']
-            if label == 'plane':
-                plane_ls.append(shape['points'])
-            if label == 'corner':
-                corner_ls.extend(shape['points'])
-        for plane in plane_ls:
-            parallel_line_pair_ls.append(
-                [plane[0], plane[1], plane[2], plane[3]])
-            parallel_line_pair_ls.append(
-                [plane[1], plane[2], plane[3], plane[0]])
-        self.plane_ls = np.array(plane_ls)
-        self.corner_ls = np.array(corner_ls)
-        self.parallel_line_pair_ls = np.array(parallel_line_pair_ls)
-        self.image_path = os.path.join('dataset', json_obj['imagePath'])
-        self.image = cv2.imread(self.image_path)
-        self.assign_plane_corner_indices()
+        if filename is None:
+            c = 1/(2**0.5)
+            h = 0.5
+            g = 3**0.5/2
+            D = np.array([0, 0, 0])
+            A = np.array([1, 0, c])
+            C = np.array([-h, g, c])
+            E = np.array([-h, -g, c])
+            B = A + C - D
+            G = A + E - D
+            F = C + E - D
+
+            p3d_ls = np.array([A, B, C, D, E, F, G]) + np.array([0, 0, 1])
+            K = np.array([[3000, 0, 1500], [0, 3000, 1500], [0, 0, 1]])
+
+            p2d_ls = []
+            for p3d in p3d_ls:
+                p3d = np.array(p3d)
+                p2d = K.dot(p3d)
+                p2d = p2d[:2]/p2d[2]
+                p2d_ls.append(p2d)
+
+            plane0 = [p2d_ls[0], p2d_ls[1], p2d_ls[2], p2d_ls[3]]  # ABCD
+            plane1 = [p2d_ls[2], p2d_ls[3], p2d_ls[4], p2d_ls[5]]  # CDEF
+            plane2 = [p2d_ls[0], p2d_ls[3], p2d_ls[4], p2d_ls[6]]  # ADEG
+            plane_ls = [plane0, plane1, plane2]
+
+            parallel_line_pair_ls = []
+            for plane in plane_ls:
+                parallel_line_pair_ls.append(
+                    [plane[0], plane[1], plane[2], plane[3]])
+                parallel_line_pair_ls.append(
+                    [plane[1], plane[2], plane[3], plane[0]])
+
+            self.plane_ls = np.array(plane_ls)
+            self.corner_ls = np.array(p2d_ls)
+            self.parallel_line_pair_ls = np.array(parallel_line_pair_ls)
+            self.image = np.zeros((5000, 5000, 3))
+            self.assign_plane_corner_indices()
+            print(self.share_corner_idx)
+            self.K = K
+
+        else:
+            fp = open(filename)
+            json_obj = json.loads(fp.read())
+            plane_ls = []
+            corner_ls = []
+            parallel_line_pair_ls = []
+            for shape in json_obj['shapes']:
+                label = shape['label']
+                if label == 'plane':
+                    plane_ls.append(shape['points'])
+                if label == 'corner':
+                    corner_ls.extend(shape['points'])
+            for plane in plane_ls:
+                parallel_line_pair_ls.append(
+                    [plane[0], plane[1], plane[2], plane[3]])
+                parallel_line_pair_ls.append(
+                    [plane[1], plane[2], plane[3], plane[0]])
+            self.plane_ls = np.array(plane_ls)
+            self.corner_ls = np.array(corner_ls)
+            self.parallel_line_pair_ls = np.array(parallel_line_pair_ls)
+            self.image_path = os.path.join('dataset', json_obj['imagePath'])
+            self.image = cv2.imread(self.image_path)
+            self.assign_plane_corner_indices()
 
     def augment(self):
         fig, ax = plt.subplots(1)
@@ -219,7 +262,8 @@ class Box():
         for corner in self.corner_ls:
             circ = Circle(corner, 50, color='r')
             ax.add_patch(circ)
-        fig.savefig('augment.png')
+        plt.show()
+        # fig.savefig('augment.png')
 
     def get_vanishing_points(self):
         self.vanishing_points = []
@@ -264,6 +308,7 @@ class Box():
     def get_camera_matrix(self):
         self.get_vanishing_points()
         self.K = compute_K_from_vanishing_points(self.vanishing_points)
+        print(self.K)
 
     def solve_plane_3d_position(self, K, plane, idx):
         K_inv = np.linalg.inv(K)
@@ -332,7 +377,8 @@ class Box():
                 z.append(p3d[2])
             ax.plot3D(x, y, z, 'blue')
         ax.view_init(None, 100)
-        fig.savefig('3drecon.png')
+        plt.show()
+        # fig.savefig('3drecon.png')
 
     def solve_box_3d_position(self):
         K_inv = np.linalg.inv(self.K)
@@ -392,7 +438,10 @@ class Box():
 
 if __name__ == '__main__':
     filename = 'dataset/snack1.json'
-    box = Box(filename)
-    box.get_camera_matrix()
-    scale_p3d_ls = box.solve_box_3d_position()
-    box.show_3d_box_reconstruction()
+    #box = Box(filename)
+    box = Box(None)
+    # box.augment()
+    # box.get_camera_matrix()
+    #scale_p3d_ls = box.solve_box_3d_position()
+    # box.show_3d_box_reconstruction()
+    box.show_3d_reconstruction()
