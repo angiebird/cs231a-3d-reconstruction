@@ -201,6 +201,7 @@ class Box():
         self.parallel_line_pair_ls = np.array(parallel_line_pair_ls)
         self.image_path = os.path.join('dataset', json_obj['imagePath'])
         self.image = cv2.imread(self.image_path)
+        self.assign_plane_corner_indices()
 
     def augment(self):
         fig, ax = plt.subplots(1)
@@ -332,3 +333,66 @@ class Box():
             ax.plot3D(x, y, z, 'blue')
         ax.view_init(None, 100)
         fig.savefig('3drecon.png')
+
+    def solve_box_3d_position(self):
+        K_inv = np.linalg.inv(self.K)
+
+        p3d_ls = []
+        for point in self.corner_ls:
+            p = [point[0], point[1], 1]
+            p3d = K_inv.dot(p)
+            p3d_ls.append(p3d)
+
+        A_ls = []
+        b_ls = []
+        for plane_idx, plane in enumerate(self.plane_ls):
+            idx = 0
+            for order, corner_idx in enumerate(self.plane_corner_indices[plane_idx]):
+                if corner_idx == self.share_corner_idx:
+                    idx = order
+
+            corner_indices = self.plane_corner_indices[plane_idx]
+            A = np.zeros((3, len(self.corner_ls)))
+            # print("=")
+            for i in range(1, 4):
+                corner_idx = corner_indices[(idx + i) % 4]
+                sign = (-1) ** (i+1)
+                A[:, corner_idx] = sign * p3d_ls[corner_idx]
+                # print(p3d_ls[corner_idx])
+            b = p3d_ls[self.share_corner_idx]
+            # print(b)
+            A_ls.append(A)
+            b_ls.append(b)
+        AA = np.concatenate(A_ls, axis=0)
+        bb = np.concatenate(b_ls)
+        AA_inv = np.linalg.pinv(AA)
+        r = AA_inv.dot(bb)
+        scale_p3d_ls = []
+        for i, p3d in enumerate(p3d_ls):
+            scale_p3d_ls.append(p3d * r[i])
+        return scale_p3d_ls
+
+    def show_3d_box_reconstruction(self):
+        fig = plt.figure()
+        ax = plt.axes(projection='3d')
+        p3d_ls = box.solve_box_3d_position()
+        for plane_idx, plane in enumerate(self.plane_ls):
+            x = []
+            y = []
+            z = []
+            for corner_idx in self.plane_corner_indices[plane_idx]:
+                p3d = p3d_ls[corner_idx]
+                x.append(p3d[0])
+                y.append(p3d[1])
+                z.append(p3d[2])
+                ax.plot3D(x, y, z, 'blue')
+        ax.view_init(None, 100)
+        plt.show()
+
+
+if __name__ == '__main__':
+    filename = 'dataset/snack1.json'
+    box = Box(filename)
+    box.get_camera_matrix()
+    scale_p3d_ls = box.solve_box_3d_position()
+    box.show_3d_box_reconstruction()
