@@ -286,9 +286,9 @@ class Box():
         for i, corner in enumerate(self.corner_ls):
             circ = Circle(corner, 50, color='r')
             ax.add_patch(circ)
-            #ax.text(corner[0], corner[1], str(i))
+            ax.text(corner[0], corner[1], str(i))
         plt.show()
-        fig.savefig('augment.png')
+        # fig.savefig('augment.png')
 
     def get_vanishing_points(self):
         self.vanishing_points = []
@@ -468,7 +468,8 @@ class Box():
 
     def show_3d_box_point_cloud(self):
         pixel_count = 1000
-        p3d_ls = box.solve_box_3d_position()
+        self.get_camera_matrix()
+        p3d_ls = self.solve_box_3d_position()
         point_cloud = []
         colors = []
         for plane_idx, plane in enumerate(self.plane_ls):
@@ -495,13 +496,59 @@ class Box():
         #pcd.normals = o3d.utility.Vector3dVector(normals)
         o3d.visualization.draw_geometries([pcd])
 
+    def gt_length(self):
+        self.Gmean = (8 * 10 * 14.2) ** (1/3)
+        self.sideA_ls = [[0, 4], [1, 5], [2, 6]]
+        self.LA = 8/self.Gmean
+
+        self.sideB_ls = [[0, 1], [2, 3], [4, 5]]
+        self.LB = 10/self.Gmean
+
+        self.sideC_ls = [[0, 2], [1, 3], [4, 6]]
+        self.LC = 14.2/self.Gmean
+
+        self.edges = [[0, 4], [1, 5], [2, 6], [0, 1],
+                      [2, 3], [4, 5], [0, 2], [1, 3], [4, 6]]
+
+    def eval(self):
+        self.gt_length()
+        p3d_ls = self.solve_box_3d_position()
+        mean = 1
+        for e in self.edges:
+            d = p3d_ls[e[0]] - p3d_ls[e[1]]
+            l = d.dot(d) ** 0.5
+            mean *= l
+        mean = mean ** (1 / len(self.edges))
+
+        error = 0
+        for e in self.sideA_ls:
+            d = p3d_ls[e[0]] - p3d_ls[e[1]]
+            l = d.dot(d) ** 0.5 / mean
+            error += abs(l - self.LA) / self.LA
+            print(l, (l - self.LA) / self.LA)
+
+        for e in self.sideB_ls:
+            d = p3d_ls[e[0]] - p3d_ls[e[1]]
+            l = d.dot(d) ** 0.5 / mean
+            error += abs(l - self.LB) / self.LB
+            print(l, (l - self.LB) / self.LB)
+
+        for e in self.sideC_ls:
+            d = p3d_ls[e[0]] - p3d_ls[e[1]]
+            l = d.dot(d) ** 0.5 / mean
+            error += abs(l - self.LC) / self.LC
+            print(l, (l - self.LC) / self.LC)
+        error /= len(self.edges)
+        print(error)
+
 
 if __name__ == '__main__':
     filename = 'dataset/snack1.json'
     box = Box(filename)
     #box = Box(None)
-    box.augment()
+    # box.augment()
     box.get_camera_matrix()
+    # box.eval()
     # box.show_3d_reconstruction()
-    box.show_3d_box_reconstruction()
-    # box.show_3d_box_point_cloud()
+    # box.show_3d_box_reconstruction()
+    box.show_3d_box_point_cloud()
