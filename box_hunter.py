@@ -6,6 +6,8 @@ import json
 import os
 from mpl_toolkits import mplot3d
 
+import open3d as o3d
+
 
 def test_edge_detector():
     path = 'dataset/snack1.jpg'
@@ -197,9 +199,7 @@ class Box():
 
             p2d_ls = []
             for p3d in p3d_ls:
-                p3d = np.array(p3d)
-                p2d = K.dot(p3d)
-                p2d = p2d[:2]/p2d[2]
+                p2d = self.p3d_to_p2d(self, K, p3d)
                 p2d_ls.append(p2d)
 
             plane0 = [p2d_ls[0], p2d_ls[1], p2d_ls[2], p2d_ls[3]]  # ABCD
@@ -243,7 +243,17 @@ class Box():
             self.parallel_line_pair_ls = np.array(parallel_line_pair_ls)
             self.image_path = os.path.join('dataset', json_obj['imagePath'])
             self.image = cv2.imread(self.image_path)
+            red = self.image[:, :, 2].copy()
+            blue = self.image[:, :, 0].copy()
+            self.image[:, :, 0] = red
+            self.image[:, :, 2] = blue
+            #self.image = plt.imread(self.image_path)
             self.assign_plane_corner_indices()
+
+    def p3d_to_p2d(self, K, p3d):
+        p2d = K.dot(p3d)
+        p2d = p2d[:2]/p2d[2]
+        return p2d
 
     def augment(self):
         fig, ax = plt.subplots(1)
@@ -379,6 +389,11 @@ class Box():
         plt.show()
         # fig.savefig('3drecon.png')
 
+    def get_share_order(self, plane_idx):
+        for order, corner_idx in enumerate(self.plane_corner_indices[plane_idx]):
+            if corner_idx == self.share_corner_idx:
+                return order
+
     def solve_box_3d_position(self):
         K_inv = np.linalg.inv(self.K)
 
@@ -391,10 +406,7 @@ class Box():
         A_ls = []
         b_ls = []
         for plane_idx, plane in enumerate(self.plane_ls):
-            idx = 0
-            for order, corner_idx in enumerate(self.plane_corner_indices[plane_idx]):
-                if corner_idx == self.share_corner_idx:
-                    idx = order
+            idx = self.get_share_order(plane_idx)
 
             corner_indices = self.plane_corner_indices[plane_idx]
             A = np.zeros((3, len(self.corner_ls)))
@@ -412,16 +424,17 @@ class Box():
         bb = np.concatenate(b_ls)
         AA_inv = np.linalg.pinv(AA)
         r = AA_inv.dot(bb)
-        r[3] = 1  # The default ratio of D
+        r[self.share_corner_idx] = 1  # The default ratio of shared corner
         scale_p3d_ls = []
         for i, p3d in enumerate(p3d_ls):
             scale_p3d_ls.append(p3d * r[i])
         return scale_p3d_ls
 
     def show_3d_box_reconstruction(self):
+        p3d_ls = box.solve_box_3d_position()
+
         fig = plt.figure()
         ax = plt.axes(projection='3d')
-        p3d_ls = box.solve_box_3d_position()
         for plane_idx, plane in enumerate(self.plane_ls):
             x = []
             y = []
@@ -436,13 +449,43 @@ class Box():
         ax.view_init(None, 100)
         plt.show()
 
+    def show_3d_box_point_cloud(self):
+        pixel_count = 1000
+        p3d_ls = box.solve_box_3d_position()
+        point_cloud = []
+        colors = []
+        for plane_idx, plane in enumerate(self.plane_ls):
+            share_order = self.get_share_order(plane_idx)
+            plane_corner_indices = self.plane_corner_indices[plane_idx]
+            A = p3d_ls[plane_corner_indices[(share_order + 1) % 4]]
+            B = p3d_ls[plane_corner_indices[(share_order + 2) % 4]]
+            C = p3d_ls[plane_corner_indices[(share_order + 3) % 4]]
+            D = p3d_ls[plane_corner_indices[share_order]]
+            u = (A - D) / (pixel_count + 1)
+            v = (C - D) / (pixel_count + 1)
+            for r in range(pixel_count + 1):
+                for c in range(pixel_count + 1):
+                    p3d = D + r * u + c * v
+                    p2d = self.p3d_to_p2d(self.K, p3d)
+                    point_cloud.append(p3d)
+                    c = self.image[int(p2d[1]), int(p2d[0]), :]
+                    colors.append(c)
+
+        colors = np.array(colors)
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(point_cloud)
+        pcd.colors = o3d.utility.Vector3dVector(colors/255)
+        #pcd.normals = o3d.utility.Vector3dVector(normals)
+        o3d.visualization.draw_geometries([pcd])
+
 
 if __name__ == '__main__':
     filename = 'dataset/snack1.json'
-    #box = Box(filename)
-    box = Box(None)
+    box = Box(filename)
+    #box = Box(None)
     # box.augment()
-    # box.get_camera_matrix()
+    box.get_camera_matrix()
     #scale_p3d_ls = box.solve_box_3d_position()
-    box.show_3d_box_reconstruction()
+    # box.show_3d_box_reconstruction()
     # box.show_3d_reconstruction()
+    box.show_3d_box_point_cloud()
