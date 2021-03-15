@@ -283,11 +283,12 @@ class Box():
                 y2 = plane[(idx + 1) % num, 1]
                 ax.plot([x1, x2], [y1, y2], linewidth=4)
 
-        for corner in self.corner_ls:
+        for i, corner in enumerate(self.corner_ls):
             circ = Circle(corner, 50, color='r')
             ax.add_patch(circ)
+            #ax.text(corner[0], corner[1], str(i))
         plt.show()
-        # fig.savefig('augment.png')
+        fig.savefig('augment.png')
 
     def get_vanishing_points(self):
         self.vanishing_points = []
@@ -402,7 +403,7 @@ class Box():
             ax.plot3D(x, y, z, 'blue')
         ax.view_init(None, 100)
         plt.show()
-        # fig.savefig('3drecon.png')
+        fig.savefig('3drecon_plane.png')
 
     def get_share_order(self, plane_idx):
         for order, corner_idx in enumerate(self.plane_corner_indices[plane_idx]):
@@ -446,7 +447,7 @@ class Box():
         return scale_p3d_ls
 
     def show_3d_box_reconstruction(self):
-        p3d_ls = box.solve_box_3d_position()
+        p3d_ls = self.solve_box_3d_position()
 
         fig = plt.figure()
         ax = plt.axes(projection='3d')
@@ -462,6 +463,7 @@ class Box():
                 z.append(p3d[2])
                 ax.plot3D(x, y, z, 'blue')
         ax.view_init(None, 100)
+        fig.savefig('3drecon_box.png')
         plt.show()
 
     def show_3d_box_point_cloud(self):
