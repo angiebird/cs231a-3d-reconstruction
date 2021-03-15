@@ -183,6 +183,7 @@ def compute_rotation_matrix_between_cameras(vanishing_points1, vanishing_points2
 class Box():
     def __init__(self, filename):
         if filename is None:
+            # Toy example
             c = 1/(2**0.5)
             h = 0.5
             g = 3**0.5/2
@@ -240,6 +241,9 @@ class Box():
                     [plane[1], plane[2], plane[3], plane[0]])
             self.plane_ls = np.array(plane_ls)
             self.corner_ls = np.array(corner_ls)
+            self.assign_plane_corner_indices()
+            self.use_corner_ls_only()
+
             self.parallel_line_pair_ls = np.array(parallel_line_pair_ls)
             self.image_path = os.path.join('dataset', json_obj['imagePath'])
             self.image = cv2.imread(self.image_path)
@@ -248,7 +252,18 @@ class Box():
             self.image[:, :, 0] = red
             self.image[:, :, 2] = blue
             #self.image = plt.imread(self.image_path)
-            self.assign_plane_corner_indices()
+
+    def use_corner_ls_only(self):
+        # update self.plane_ls using self.corner_ls
+        num_plane = len(self.plane_ls)
+        self.plane_ls = []
+        for plane_idx in range(num_plane):
+            corner_indices = self.plane_corner_indices[plane_idx]
+            new_plane = []
+            for corner_index in corner_indices:
+                new_plane.append(self.corner_ls[corner_index])
+            self.plane_ls.append(new_plane)
+        self.plane_ls = np.array(self.plane_ls)
 
     def p3d_to_p2d(self, K, p3d):
         p2d = K.dot(p3d)
@@ -483,9 +498,8 @@ if __name__ == '__main__':
     filename = 'dataset/snack1.json'
     box = Box(filename)
     #box = Box(None)
-    # box.augment()
+    box.augment()
     box.get_camera_matrix()
-    #scale_p3d_ls = box.solve_box_3d_position()
-    # box.show_3d_box_reconstruction()
     # box.show_3d_reconstruction()
-    box.show_3d_box_point_cloud()
+    box.show_3d_box_reconstruction()
+    # box.show_3d_box_point_cloud()
