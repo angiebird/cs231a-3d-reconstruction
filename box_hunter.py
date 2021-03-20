@@ -349,8 +349,32 @@ class Box():
         A = np.array([a, -b, c]).T
         A_inv = np.linalg.inv(A)
         r = A_inv.dot(d)
-        scale_p3d_ls = [a * r[0], b * r[1], c * r[2], d]
+        scale_p3d_ls = [None, None, None, None]
+        scale_p3d_ls
+        scale_p3d_ls[(idx + 1) % 4] = a * r[0]
+        scale_p3d_ls[(idx + 2) % 4] = b * r[1]
+        scale_p3d_ls[(idx + 3) % 4] = c * r[2]
+        scale_p3d_ls[idx] = d
+        #scale_p3d_ls = [a * r[0], b * r[1], c * r[2], d]
         return scale_p3d_ls
+
+    def solve_plane_3d_position_avg(self):
+        p3d_ls = [[], [], [], [], [], [], []]
+        for plane_idx, plane in enumerate(self.plane_ls):
+            idx = 0
+            corner_indices = self.plane_corner_indices[plane_idx]
+            for order, corner_idx in enumerate(corner_indices):
+                if corner_idx == self.share_corner_idx:
+                    idx = order
+            plane_p3d_ls = self.solve_plane_3d_position(self.K, plane, idx)
+            for idx, p3d in enumerate(plane_p3d_ls):
+                cidx = corner_indices[idx]
+                p3d_ls[cidx].append(p3d)
+        new_p3d_ls = [[], [], [], [], [], [], []]
+        for i in range(7):
+            p3d = np.array(p3d_ls[i])
+            new_p3d_ls[i] = p3d.mean(axis=0)
+        return new_p3d_ls
 
     def assign_plane_corner_indices(self):
         self.plane_corner_indices = []
@@ -446,8 +470,12 @@ class Box():
             scale_p3d_ls.append(p3d * r[i])
         return scale_p3d_ls
 
-    def show_3d_box_reconstruction(self):
-        p3d_ls = self.solve_box_3d_position()
+    def show_3d_box_reconstruction(self, naive=False):
+        p3d_ls = None
+        if naive:
+            p3d_ls = self.solve_plane_3d_position_avg()
+        else:
+            p3d_ls = self.solve_box_3d_position()
 
         fig = plt.figure()
         ax = plt.axes(projection='3d')
@@ -463,7 +491,10 @@ class Box():
                 z.append(p3d[2])
                 ax.plot3D(x, y, z, 'blue')
         ax.view_init(None, 100)
-        fig.savefig('3drecon_box.png')
+        if naive:
+            fig.savefig('naive_3drecon_box.png')
+        else:
+            fig.savefig('3drecon_box.png')
         plt.show()
 
     def show_3d_box_point_cloud(self):
@@ -510,9 +541,11 @@ class Box():
         self.edges = [[0, 4], [1, 5], [2, 6], [0, 1],
                       [2, 3], [4, 5], [0, 2], [1, 3], [4, 6]]
 
-    def eval(self):
+    def eval(self, naive=False):
         self.gt_length()
         p3d_ls = self.solve_box_3d_position()
+        if naive:
+            p3d_ls = self.solve_plane_3d_position_avg()
         mean = 1
         for e in self.edges:
             d = p3d_ls[e[0]] - p3d_ls[e[1]]
@@ -550,5 +583,6 @@ if __name__ == '__main__':
     box.get_camera_matrix()
     # box.eval()
     # box.show_3d_reconstruction()
+    # box.show_3d_box_reconstruction(True)
     # box.show_3d_box_reconstruction()
     box.show_3d_box_point_cloud()
